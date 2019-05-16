@@ -1,0 +1,75 @@
+
+## Scale ML Model Prediction Use with AWS and Docker
+ # taken directly from https://www.knowru.com/blog/how-to-scale-up-credit-model-apis-using-aws/
+
+# 1. 1 Server, 1 Docker Container
+docker-machine create \
+     --driver amazonec2 \
+     --amazonec2-access-key xxx \
+     --amazonec2-secret-key xxx \
+     --amazonec2-region us-east-2 \
+     --amazonec2-instance-type t2.small \
+     PlumberAppServer1
+
+# deploy the model
+eval "$(docker-machine env PlumberAppServer1)" && docker build -t knowru/plumber_example https://github.com/Knowru/plumber_example.git     
+
+# check it 
+curl --data "@data.json" 52.14.237.113:8000/predict
+
+# check performance
+siege -H 'Content-Type:application/json' "http://52.14.237.113:8000/predict POST < data.json" -b -c 10 -r 100
+
+
+# 2. 1 Server, 5 Docker Containers
+
+# add these to the one created above
+eval "$(docker-machine env PlumberAppServer1)" && docker run -p 8001:8000 -d knowru/plumber_example
+eval "$(docker-machine env PlumberAppServer1)" && docker run -p 8002:8000 -d knowru/plumber_example 
+eval "$(docker-machine env PlumberAppServer1)" && docker run -p 8003:8000 -d knowru/plumber_example 
+eval "$(docker-machine env PlumberAppServer1)" && docker run -p 8004:8000 -d knowru/plumber_example
+
+# use nginx to load-balance
+eval "$(docker-machine env PlumberAppServer1)" && git clone https://github.com/Knowru/plumber_example.git
+eval "$(docker-machine env PlumberAppServer1)" && docker run -v /home/ubuntu/plumber_example:/etc/nginx/conf.d:ro -d -p 80:80 nginx
+
+# check performance
+siege -H 'Content-Type:application/json' "http://52.14.237.113/predict POST < data.json" -b -c 10 -r 100
+
+
+# 3. 5 Servers, 5 Docker Containers each
+
+# setup is a bit tricky because the instructions use the UI using AMI
+    # click on Actions, then Image, then Create Image
+    # in the Create Image window:
+        # enter the Image name "PlumberApp"
+        # enter the Image description "AMI for PlumberApp"
+        # Enter the Size (GiB) of 16, and Volume Type of General Purpose SSD (GP2), mark the Delete on Termination box
+        # then click the Create Image button at the bottom-right
+
+# then spawn 4 more servers
+for i in {2..5}
+do
+    docker-machine create \
+         --driver amazonec2 \
+         --amazonec2-access-key xxxx \
+         --amazonec2-secret-key xxxx \
+         --amazonec2-region us-east-2 \
+         --amazonec2-instance-type t2.small \
+         --amazonec2-ami ami-c20420a7 \
+         PlumberAppServer$i
+done
+ 
+for i in {1..5}
+do
+    eval "$(docker-machine env PlumberAppServer$i)" && docker start $(docker ps -a -q)
+done
+
+# create a load balancer, Elastic Load Balancer (ELB)
+    # example just shows a GUI window so not 100% sure how to get there
+
+# check it 
+curl --data "@data.json" http://PlumberApp-659096156.us-east-2.elb.amazonaws.com/predict
+
+# check performance 
+siege -H 'Content-Type:application/json' "http://PlumberApp-659096156.us-east-2.elb.amazonaws.com/predict POST < data.json" -b -c 10 -r 100

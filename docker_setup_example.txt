@@ -1,0 +1,28 @@
+
+# taken directly from https://www.knowru.com/blog/how-scale-r-restful-apis-using-docker/
+
+# Using Docker containers to run an API
+
+# Build 1 Docker Container
+
+docker build -t knowru/plumber_example https://github.com/Knowru/plumber_example.git
+    # run it
+docker run -p 8000:8000 -d knowru/plumber_example
+    # check it
+curl --data "@data.json" localhost:8000/predict
+    # result: {"default.probability":0.3058}
+# measure performance
+sudo siege -H 'Content-Type:application/json' "http://localhost:8000/predict POST < data.json" -b -c 1 -r 100
+
+
+# Build multiple Docker Containers (on different ports)
+
+docker run -p 8001:8000 -d knowru/plumber_example
+docker run -p 8002:8000 -d knowru/plumber_example
+docker run -p 8003:8000 -d knowru/plumber_example
+docker run -p 8004:8000 -d knowru/plumber_example
+    # use ngix to load balance the multiple containers
+sudo docker run -v /home/spark/plumber_example/nginx.conf:/etc/nginx/conf.d/default.conf:ro -d -p 80:80 nginx
+    # check it 
+curl --data "@data.json" localhost/predict
+

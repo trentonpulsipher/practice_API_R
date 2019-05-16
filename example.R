@@ -1,4 +1,6 @@
 
+## Code and structure directly copied from https://www.knowru.com/blog/how-create-restful-api-for-machine-learning-credit-model-in-r/
+
 # install.packages("rpart.plot")
 library(rpart.plot)
 
